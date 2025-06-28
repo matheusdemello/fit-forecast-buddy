@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Calendar, Clock, Dumbbell, Edit2, Trash2, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useWorkouts } from '../hooks/useWorkouts';
+import { useSupabaseWorkouts } from '../hooks/useSupabaseWorkouts';
 import { Workout } from '../types/workout';
 import { toast } from 'sonner';
 import WorkoutEditDialog from './WorkoutEditDialog';
 
 const WorkoutHistory = () => {
-  const { workouts, loading, deleteWorkout, updateWorkout } = useWorkouts();
+  const { workouts, loading, deleteWorkout, updateWorkout } = useSupabaseWorkouts();
   const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
   const [workoutToEdit, setWorkoutToEdit] = useState<Workout | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);

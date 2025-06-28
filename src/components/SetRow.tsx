@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +9,7 @@ interface SetRowProps {
   setIndex: number;
   isCompleted: boolean;
   onToggleCompletion: () => void;
-  onUpdateSet: (field: 'reps' | 'weight' | 'rir', value: number) => void;
+  onUpdateSet: (field: 'reps' | 'weight' | 'rir' | 'rest_time', value: number) => void;
   onRemoveSet: () => void;
   showRIR?: boolean;
 }
@@ -24,7 +23,7 @@ const SetRow = ({
   onRemoveSet,
   showRIR = true
 }: SetRowProps) => {
-  const gridCols = showRIR ? "grid-cols-14" : "grid-cols-12";
+  const gridCols = showRIR ? "grid-cols-16" : "grid-cols-14";
   
   return (
     <div className={`grid ${gridCols} gap-2 items-center ${isCompleted ? 'opacity-75' : ''}`}>
@@ -76,8 +75,17 @@ const SetRow = ({
           />
         </div>
       )}
-      <div className={`${showRIR ? 'col-span-3' : 'col-span-2'} text-xs text-muted-foreground`}>
-        {set.rest_time || 90}s
+      <div className={`${showRIR ? 'col-span-3' : 'col-span-4'}`}>
+        <Input
+          type="number"
+          value={set.rest_time || 90}
+          onChange={(e) => onUpdateSet('rest_time', parseInt(e.target.value) || 90)}
+          min="0"
+          max="600"
+          disabled={isCompleted}
+          placeholder="rest (s)"
+          className="text-center text-xs"
+        />
       </div>
       <div className="col-span-1">
         <Button

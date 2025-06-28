@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import { Workout, WorkoutSet, WorkoutExercise } from '../types/workout';
-import { useWorkouts } from '../hooks/useWorkouts';
+import { useSupabaseWorkouts } from '../hooks/useSupabaseWorkouts';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import ExerciseSelector from './ExerciseSelector';
@@ -21,7 +21,7 @@ interface WorkoutEditDialogProps {
 }
 
 const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditDialogProps) => {
-  const { exercises, addExercise } = useWorkouts();
+  const { exercises, addExercise } = useSupabaseWorkouts();
   const [editedWorkout, setEditedWorkout] = useState<Omit<Workout, 'id'> | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -133,7 +133,7 @@ const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditD
     setEditedWorkout({ ...editedWorkout, exercises: updatedExercises });
   };
 
-  const updateSet = (exerciseIndex: number, setIndex: number, field: 'reps' | 'weight', value: number) => {
+  const updateSet = (exerciseIndex: number, setIndex: number, field: 'reps' | 'weight' | 'rest_time', value: number) => {
     if (!editedWorkout) return;
     const updatedExercises = [...editedWorkout.exercises];
     updatedExercises[exerciseIndex].sets[setIndex][field] = value;
@@ -212,35 +212,41 @@ const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditD
           <div className="space-y-4">
             <Label>Exercises</Label>
             {editedWorkout.exercises.length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">No exercises in this workout</p>
-              </Card>
+              <p className="text-muted-foreground text-center py-8">No exercises added yet</p>
             ) : (
               editedWorkout.exercises.map((exerciseEntry, exerciseIndex) => (
                 <Card key={`${exerciseEntry.exercise.id}-${exerciseIndex}`} className="p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium">{exerciseEntry.exercise.name}</h4>
-                      <Badge variant="secondary" className="text-xs">
-                        {exerciseEntry.exercise.category}
-                      </Badge>
+                      <h4 className="font-semibold">{exerciseEntry.exercise.name}</h4>
+                      <Badge variant="secondary">{exerciseEntry.exercise.category}</Badge>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeExercise(exerciseIndex)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => addSet(exerciseIndex)}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Set
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => removeExercise(exerciseIndex)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-sm font-medium text-muted-foreground">
                       <div className="col-span-2">Set</div>
-                      <div className="col-span-4">Weight (kg)</div>
-                      <div className="col-span-4">Reps</div>
-                      <div className="col-span-2"></div>
+                      <div className="col-span-3">Weight (kg)</div>
+                      <div className="col-span-3">Reps</div>
+                      <div className="col-span-3">Rest (s)</div>
+                      <div className="col-span-1"></div>
                     </div>
                     
                     {exerciseEntry.sets.map((set, setIndex) => (
@@ -248,7 +254,7 @@ const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditD
                         <div className="col-span-2 text-sm font-medium">
                           {setIndex + 1}
                         </div>
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <Input
                             type="number"
                             value={set.weight}
@@ -257,7 +263,7 @@ const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditD
                             min="0"
                           />
                         </div>
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <Input
                             type="number"
                             value={set.reps}
@@ -265,48 +271,41 @@ const WorkoutEditDialog = ({ workout, open, onOpenChange, onSave }: WorkoutEditD
                             min="1"
                           />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-3">
+                          <Input
+                            type="number"
+                            value={set.rest_time || 90}
+                            onChange={(e) => updateSet(exerciseIndex, setIndex, 'rest_time', parseInt(e.target.value) || 90)}
+                            min="0"
+                            max="600"
+                            placeholder="90"
+                          />
+                        </div>
+                        <div className="col-span-1">
                           <Button
-                            variant="ghost"
                             size="sm"
+                            variant="ghost"
                             onClick={() => removeSet(exerciseIndex, setIndex)}
-                            className="text-destructive hover:text-destructive"
+                            className="p-0 h-6 w-6"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
                         </div>
                       </div>
                     ))}
                   </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addSet(exerciseIndex)}
-                    className="mt-3"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add Set
-                  </Button>
                 </Card>
               ))
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
-            >
-              <X className="w-4 h-4 mr-1" />
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-            >
-              <Save className="w-4 h-4 mr-1" />
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-2" />
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
