@@ -1,12 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React, { useState } from 'react';
+import WorkoutLogger from '../components/WorkoutLogger';
+import WorkoutHistory from '../components/WorkoutHistory';
+import WorkoutStats from '../components/WorkoutStats';
+import BottomNavigation from '../components/BottomNavigation';
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState<'log' | 'history' | 'stats'>('log');
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'log':
+        return <WorkoutLogger />;
+      case 'history':
+        return <WorkoutHistory />;
+      case 'stats':
+        return <WorkoutStats />;
+      default:
+        return <WorkoutLogger />;
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-background pb-20">
+      <div className="max-w-md mx-auto">
+        {renderContent()}
       </div>
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
