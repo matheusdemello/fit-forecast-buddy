@@ -4,16 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Timer } from 'lucide-react';
+import { Plus, Trash2, Timer, CheckCircle2, Target } from 'lucide-react';
 import { useWorkouts } from '../hooks/useWorkouts';
 import { Exercise, WorkoutSet, WorkoutExercise } from '../types/workout';
 import { toast } from 'sonner';
+import RestTimer from './RestTimer';
 
 const WorkoutLogger = () => {
-  const { exercises, saveWorkout, getWorkoutSuggestions } = useWorkouts();
+  const { exercises, saveWorkout, getEnhancedSuggestions } = useWorkouts();
   const [currentWorkout, setCurrentWorkout] = useState<WorkoutExercise[]>([]);
   const [workoutStartTime] = useState(new Date());
   const [selectedExercise, setSelectedExercise] = useState<string>('');
+  const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
+  const [showRestTimer, setShowRestTimer] = useState<{ exerciseIndex: number; setIndex: number; restTime: number } | null>(null);
 
   const addExercise = () => {
     if (!selectedExercise) return;
@@ -21,8 +24,8 @@ const WorkoutLogger = () => {
     const exercise = exercises.find(e => e.id === selectedExercise);
     if (!exercise) return;
 
-    const suggestions = getWorkoutSuggestions(selectedExercise);
-    const suggestion = suggestions[0];
+    const enhancedSuggestions = getEnhancedSuggestions(selectedExercise);
+    const suggestion = enhancedSuggestions[0];
 
     const newExerciseEntry: WorkoutExercise = {
       exercise,
@@ -31,6 +34,7 @@ const WorkoutLogger = () => {
         exercise_id: selectedExercise,
         reps: suggestion?.suggested_reps || 8,
         weight: suggestion?.suggested_weight || 20,
+        rest_time: suggestion?.rest_time || 90,
       }]
     };
 
@@ -38,19 +42,27 @@ const WorkoutLogger = () => {
     setSelectedExercise('');
     
     if (suggestion?.reason) {
-      toast.success(`Suggestion: ${suggestion.reason}`);
+      toast.success(`💡 ${suggestion.reason}`, {
+        description: `Rest: ${suggestion.rest_time}s | Progression: ${suggestion.progression_type}`
+      });
     }
   };
 
   const addSet = (exerciseIndex: number) => {
     const updatedWorkout = [...currentWorkout];
     const lastSet = updatedWorkout[exerciseIndex].sets.slice(-1)[0];
+    const exerciseId = updatedWorkout[exerciseIndex].exercise.id;
+    
+    // Get suggestions for the new set
+    const suggestions = getEnhancedSuggestions(exerciseId);
+    const suggestion = suggestions[0];
     
     const newSet: WorkoutSet = {
       id: crypto.randomUUID(),
-      exercise_id: updatedWorkout[exerciseIndex].exercise.id,
-      reps: lastSet?.reps || 8,
-      weight: lastSet?.weight || 20,
+      exercise_id: exerciseId,
+      reps: lastSet?.reps || suggestion?.suggested_reps || 8,
+      weight: lastSet?.weight || suggestion?.suggested_weight || 20,
+      rest_time: suggestion?.rest_time || 90,
     };
 
     updatedWorkout[exerciseIndex].sets.push(newSet);
@@ -65,6 +77,13 @@ const WorkoutLogger = () => {
 
   const removeSet = (exerciseIndex: number, setIndex: number) => {
     const updatedWorkout = [...currentWorkout];
+    const setId = updatedWorkout[exerciseIndex].sets[setIndex].id;
+    
+    // Remove from completed sets
+    const newCompletedSets = new Set(completedSets);
+    newCompletedSets.delete(setId);
+    setCompletedSets(newCompletedSets);
+    
     updatedWorkout[exerciseIndex].sets.splice(setIndex, 1);
     
     if (updatedWorkout[exerciseIndex].sets.length === 0) {
@@ -72,6 +91,25 @@ const WorkoutLogger = () => {
     }
     
     setCurrentWorkout(updatedWorkout);
+  };
+
+  const toggleSetCompletion = (setId: string, exerciseIndex: number, setIndex: number) => {
+    const newCompletedSets = new Set(completedSets);
+    const set = currentWorkout[exerciseIndex].sets[setIndex];
+    
+    if (completedSets.has(setId)) {
+      newCompletedSets.delete(setId);
+      setShowRestTimer(null);
+    } else {
+      newCompletedSets.add(setId);
+      // Show rest timer after completing a set
+      if (set.rest_time && set.rest_time > 0) {
+        setShowRestTimer({ exerciseIndex, setIndex, restTime: set.rest_time });
+      }
+      toast.success('Set completed! 💪');
+    }
+    
+    setCompletedSets(newCompletedSets);
   };
 
   const finishWorkout = async () => {
@@ -89,18 +127,30 @@ const WorkoutLogger = () => {
     });
 
     setCurrentWorkout([]);
-    toast.success('Workout saved!');
+    setCompletedSets(new Set());
+    setShowRestTimer(null);
+    toast.success('Workout saved! Great job! 🎉');
   };
 
   const workoutDuration = Math.round((new Date().getTime() - workoutStartTime.getTime()) / 1000 / 60);
+  const totalSets = currentWorkout.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+  const completedCount = completedSets.size;
 
   return (
     <div className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Log Workout</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Timer className="w-4 h-4" />
-          {workoutDuration}m
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Timer className="w-4 h-4" />
+            {workoutDuration}m
+          </div>
+          {totalSets > 0 && (
+            <div className="flex items-center gap-1">
+              <Target className="w-4 h-4" />
+              {completedCount}/{totalSets}
+            </div>
+          )}
         </div>
       </div>
 
@@ -124,6 +174,16 @@ const WorkoutLogger = () => {
         </div>
       </Card>
 
+      {showRestTimer && (
+        <RestTimer
+          suggestedRestTime={showRestTimer.restTime}
+          onComplete={() => {
+            setShowRestTimer(null);
+            toast.success('Rest time complete! Ready for next set 🚀');
+          }}
+        />
+      )}
+
       <div className="space-y-4">
         {currentWorkout.map((exerciseEntry, exerciseIndex) => (
           <Card key={`${exerciseEntry.exercise.id}-${exerciseIndex}`} className="p-4">
@@ -131,45 +191,66 @@ const WorkoutLogger = () => {
             
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-sm font-medium text-muted-foreground">
+                <div className="col-span-1">✓</div>
                 <div className="col-span-2">Set</div>
-                <div className="col-span-4">Weight (kg)</div>
-                <div className="col-span-4">Reps</div>
-                <div className="col-span-2"></div>
+                <div className="col-span-3">Weight</div>
+                <div className="col-span-3">Reps</div>
+                <div className="col-span-2">Rest</div>
+                <div className="col-span-1"></div>
               </div>
               
-              {exerciseEntry.sets.map((set, setIndex) => (
-                <div key={set.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-2 text-sm font-medium">
-                    {setIndex + 1}
+              {exerciseEntry.sets.map((set, setIndex) => {
+                const isCompleted = completedSets.has(set.id);
+                return (
+                  <div key={set.id} className={`grid grid-cols-12 gap-2 items-center ${isCompleted ? 'opacity-75' : ''}`}>
+                    <div className="col-span-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleSetCompletion(set.id, exerciseIndex, setIndex)}
+                        className="p-0 h-6 w-6"
+                      >
+                        <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-green-600' : 'text-muted-foreground'}`} />
+                      </Button>
+                    </div>
+                    <div className="col-span-2 text-sm font-medium">
+                      {setIndex + 1}
+                    </div>
+                    <div className="col-span-3">
+                      <Input
+                        type="number"
+                        value={set.weight}
+                        onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', parseFloat(e.target.value) || 0)}
+                        step="2.5"
+                        min="0"
+                        disabled={isCompleted}
+                      />
+                    </div>
+                    <divClassName="col-span-3">
+                      <Input
+                        type="number"
+                        value={set.reps}
+                        onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt(e.target.value) || 0)}
+                        min="1"
+                        disabled={isCompleted}
+                      />
+                    </div>
+                    <div className="col-span-2 text-xs text-muted-foreground">
+                      {set.rest_time || 90}s
+                    </div>
+                    <div className="col-span-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeSet(exerciseIndex, setIndex)}
+                        className="p-0 h-6 w-6"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="col-span-4">
-                    <Input
-                      type="number"
-                      value={set.weight}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'weight', parseFloat(e.target.value) || 0)}
-                      step="2.5"
-                      min="0"
-                    />
-                  </div>
-                  <div className="col-span-4">
-                    <Input
-                      type="number"
-                      value={set.reps}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt(e.target.value) || 0)}
-                      min="1"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeSet(exerciseIndex, setIndex)}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             
             <Button
@@ -187,9 +268,15 @@ const WorkoutLogger = () => {
 
       {currentWorkout.length > 0 && (
         <Card className="p-4">
-          <Button onClick={finishWorkout} className="w-full" size="lg">
-            Finish Workout ({workoutDuration}m)
-          </Button>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Progress: {completedCount}/{totalSets} sets</span>
+              <span>Duration: {workoutDuration}m</span>
+            </div>
+            <Button onClick={finishWorkout} className="w-full" size="lg">
+              Finish Workout
+            </Button>
+          </div>
         </Card>
       )}
     </div>

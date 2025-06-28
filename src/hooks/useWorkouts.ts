@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { useDatabase } from './useDatabase';
 import { Workout, WorkoutSet, Exercise, WorkoutSuggestion } from '../types/workout';
+import { getEnhancedWorkoutSuggestions, EnhancedWorkoutSuggestion } from '../utils/workoutSuggestions';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useWorkouts = () => {
@@ -119,41 +119,19 @@ export const useWorkouts = () => {
   };
 
   const getWorkoutSuggestions = (exerciseId: string): WorkoutSuggestion[] => {
-    const suggestions: WorkoutSuggestion[] = [];
+    const enhancedSuggestions = getEnhancedWorkoutSuggestions(exerciseId, exercises, workouts);
     
-    // Find recent workouts with this exercise
-    const recentSets = workouts
-      .flatMap(w => w.exercises)
-      .filter(e => e.exercise.id === exerciseId)
-      .flatMap(e => e.sets)
-      .slice(0, 10);
-    
-    if (recentSets.length === 0) {
-      const exercise = exercises.find(e => e.id === exerciseId);
-      return [{
-        exercise_name: exercise?.name || 'Unknown',
-        suggested_weight: 20,
-        suggested_reps: 8,
-        reason: 'Starting suggestion'
-      }];
-    }
-    
-    // Calculate progression
-    const avgWeight = recentSets.reduce((sum, set) => sum + set.weight, 0) / recentSets.length;
-    const avgReps = recentSets.reduce((sum, set) => sum + set.reps, 0) / recentSets.length;
-    const lastWeight = recentSets[0]?.weight || avgWeight;
-    
-    const exercise = exercises.find(e => e.id === exerciseId);
-    
-    // Suggest slight progression
-    suggestions.push({
-      exercise_name: exercise?.name || 'Unknown',
-      suggested_weight: Math.round((lastWeight + 2.5) * 2) / 2, // Round to nearest 2.5
-      suggested_reps: Math.round(avgReps),
-      reason: 'Progressive overload (+2.5kg)'
-    });
-    
-    return suggestions;
+    // Convert enhanced suggestions to basic suggestions for backward compatibility
+    return enhancedSuggestions.map(suggestion => ({
+      exercise_name: suggestion.exercise_name,
+      suggested_weight: suggestion.suggested_weight,
+      suggested_reps: suggestion.suggested_reps,
+      reason: `${suggestion.reason} (${Math.round(suggestion.confidence * 100)}% confidence)`
+    }));
+  };
+
+  const getEnhancedSuggestions = (exerciseId: string): EnhancedWorkoutSuggestion[] => {
+    return getEnhancedWorkoutSuggestions(exerciseId, exercises, workouts);
   };
 
   useEffect(() => {
@@ -169,6 +147,7 @@ export const useWorkouts = () => {
     loading,
     saveWorkout,
     getWorkoutSuggestions,
+    getEnhancedSuggestions,
     refreshWorkouts: loadWorkouts
   };
 };
