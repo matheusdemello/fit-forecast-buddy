@@ -226,7 +226,7 @@ const WorkoutLogger = () => {
                         disabled={isCompleted}
                       />
                     </div>
-                    <divClassName="col-span-3">
+                    <div className="col-span-3">
                       <Input
                         type="number"
                         value={set.reps}
