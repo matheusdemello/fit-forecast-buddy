@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Plus, Trash2, Timer, CheckCircle2, Target, Dumbbell, Zap, Flame } from 'lucide-react';
-import { useWorkouts } from '../hooks/useWorkouts';
+import { useSupabaseWorkouts } from '../hooks/useSupabaseWorkouts';
 import { Exercise, WorkoutSet, WorkoutExercise } from '../types/workout';
 import { toast } from 'sonner';
 import RestTimer from './RestTimer';
@@ -11,12 +11,36 @@ import ExerciseSelector from './ExerciseSelector';
 import { v4 as uuidv4 } from 'uuid';
 
 const WorkoutLogger = () => {
-  const { exercises, saveWorkout, getEnhancedSuggestions, addExercise } = useWorkouts();
+  const { exercises, saveWorkout, addExercise } = useSupabaseWorkouts();
   const [currentWorkout, setCurrentWorkout] = useState<WorkoutExercise[]>([]);
   const [workoutStartTime] = useState(new Date());
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
   const [showRestTimer, setShowRestTimer] = useState<{ exerciseIndex: number; setIndex: number; restTime: number } | null>(null);
+
+  // Fallback suggestion function for when getEnhancedSuggestions is not available
+  const getDefaultSuggestion = (exerciseId: string) => {
+    const exercise = exercises.find(e => e.id === exerciseId);
+    if (!exercise) return null;
+
+    // Default suggestions based on exercise category
+    const defaults = {
+      push: { reps: 8, weight: 25, rest: 90 },
+      pull: { reps: 10, weight: 20, rest: 90 },
+      legs: { reps: 12, weight: 30, rest: 120 },
+      core: { reps: 15, weight: 10, rest: 60 }
+    };
+
+    const suggestion = defaults[exercise.category] || defaults.push;
+    
+    return {
+      suggested_reps: suggestion.reps,
+      suggested_weight: suggestion.weight,
+      rest_time: suggestion.rest,
+      reason: `Beast Mode Default for ${exercise.category.toUpperCase()}`,
+      progression_type: 'linear'
+    };
+  };
 
   const handleAddExercise = () => {
     if (!selectedExercise) return;
@@ -24,8 +48,7 @@ const WorkoutLogger = () => {
     const exercise = exercises.find(e => e.id === selectedExercise);
     if (!exercise) return;
 
-    const enhancedSuggestions = getEnhancedSuggestions(selectedExercise);
-    const suggestion = enhancedSuggestions[0];
+    const suggestion = getDefaultSuggestion(selectedExercise);
 
     const newExerciseEntry: WorkoutExercise = {
       exercise,
@@ -69,8 +92,7 @@ const WorkoutLogger = () => {
     const exerciseId = updatedWorkout[exerciseIndex].exercise.id;
     
     // Get suggestions for the new set
-    const suggestions = getEnhancedSuggestions(exerciseId);
-    const suggestion = suggestions[0];
+    const suggestion = getDefaultSuggestion(exerciseId);
     
     const newSet: WorkoutSet = {
       id: uuidv4(),

@@ -3,15 +3,26 @@ import { Workout, Exercise } from '../types/workout';
 import { ExerciseService } from '../services/exerciseService';
 import { WorkoutService } from '../services/workoutService';
 import { setupAutoSync, syncOfflineOperations } from '../services/offlineService';
+import { useAuth } from './useAuth';
 
 export const useSupabaseWorkouts = () => {
+  const { getCurrentUserId, isAuthenticated } = useAuth();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(false);
   const [isReady, setIsReady] = useState(true); // Supabase is ready immediately
 
+  // Security check: Only proceed if user is authenticated
+  const userId = getCurrentUserId();
+  const isUserAuthenticated = isAuthenticated && userId;
+
   // Initialize auto-sync for offline operations
   useEffect(() => {
+    if (!isUserAuthenticated) {
+      console.log('User not authenticated, skipping data loading');
+      return;
+    }
+
     setupAutoSync();
     
     // Attempt initial sync
@@ -23,7 +34,27 @@ export const useSupabaseWorkouts = () => {
         loadExercises();
       }
     });
-  }, []);
+
+    // Load initial data
+    loadWorkouts();
+    loadExercises();
+  }, [isUserAuthenticated, userId]);
+
+  /**
+   * Default exercises for immediate app functionality
+   */
+  const defaultExercises = [
+    { name: 'Push-ups', category: 'push' as const, muscle_groups: ['chest', 'triceps', 'shoulders'] },
+    { name: 'Pull-ups', category: 'pull' as const, muscle_groups: ['lats', 'biceps', 'middle traps'] },
+    { name: 'Squats', category: 'legs' as const, muscle_groups: ['quads', 'glutes', 'hamstrings'] },
+    { name: 'Deadlifts', category: 'legs' as const, muscle_groups: ['hamstrings', 'glutes', 'lower back'] },
+    { name: 'Bench Press', category: 'push' as const, muscle_groups: ['chest', 'triceps', 'shoulders'] },
+    { name: 'Rows', category: 'pull' as const, muscle_groups: ['lats', 'rhomboids', 'biceps'] },
+    { name: 'Overhead Press', category: 'push' as const, muscle_groups: ['shoulders', 'triceps', 'upper chest'] },
+    { name: 'Lunges', category: 'legs' as const, muscle_groups: ['quads', 'glutes', 'hamstrings'] },
+    { name: 'Plank', category: 'core' as const, muscle_groups: ['abs', 'obliques', 'lower back'] },
+    { name: 'Bicep Curls', category: 'pull' as const, muscle_groups: ['biceps', 'forearms'] }
+  ];
 
   /**
    * Load exercises from Supabase
@@ -31,9 +62,32 @@ export const useSupabaseWorkouts = () => {
   const loadExercises = async () => {
     try {
       const exerciseData = await ExerciseService.getExercises();
-      setExercises(exerciseData);
+      
+      // If no exercises exist, create defaults
+      if (exerciseData.length === 0) {
+        console.log('No exercises found, creating defaults...');
+        const createdExercises = [];
+        
+        for (const defaultEx of defaultExercises) {
+          const newExercise = await ExerciseService.createExercise(defaultEx);
+          if (newExercise) {
+            createdExercises.push(newExercise);
+          }
+        }
+        
+        setExercises(createdExercises);
+        console.log(`Created ${createdExercises.length} default exercises`);
+      } else {
+        setExercises(exerciseData);
+      }
     } catch (error) {
       console.error('Error loading exercises:', error);
+      // Fallback to in-memory defaults if everything fails
+      const fallbackExercises = defaultExercises.map((ex, index) => ({
+        id: `default-${index}`,
+        ...ex
+      }));
+      setExercises(fallbackExercises);
     }
   };
 

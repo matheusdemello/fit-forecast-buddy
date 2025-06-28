@@ -17,7 +17,7 @@ CREATE TABLE exercises (
 -- Create workouts table
 CREATE TABLE workouts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID, -- For future multi-user support
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, -- Required for security
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     duration INTEGER NOT NULL, -- Duration in minutes
     notes TEXT,
@@ -145,12 +145,149 @@ ALTER TABLE workouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout_exercise_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rp_progression_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mesocycle_settings ENABLE ROW LEVEL SECURITY;
 
--- Create basic policies (can be extended later for user authentication)
-CREATE POLICY "Allow all operations for now" ON workouts FOR ALL USING (true);
-CREATE POLICY "Allow all operations for now" ON workout_sets FOR ALL USING (true);
-CREATE POLICY "Allow all operations for now" ON workout_exercise_data FOR ALL USING (true);
-CREATE POLICY "Allow all operations for now" ON sync_queue FOR ALL USING (true);
+-- Add user_id to progression tables for proper isolation
+ALTER TABLE rp_progression_state ADD COLUMN user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid();
+ALTER TABLE mesocycle_settings ADD COLUMN user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid();
+
+-- Create secure user-specific policies for data isolation
+-- Workouts: Users can only access their own workouts
+CREATE POLICY "Users can only see their own workouts" ON workouts
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own workouts" ON workouts
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own workouts" ON workouts
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own workouts" ON workouts
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Workout Sets: Users can only access sets from their own workouts
+CREATE POLICY "Users can only see sets from their own workouts" ON workout_sets
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_sets.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only insert sets for their own workouts" ON workout_sets
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_sets.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only update sets from their own workouts" ON workout_sets
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_sets.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only delete sets from their own workouts" ON workout_sets
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_sets.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+-- Workout Exercise Data: Users can only access data from their own workouts
+CREATE POLICY "Users can only see exercise data from their own workouts" ON workout_exercise_data
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_exercise_data.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only insert exercise data for their own workouts" ON workout_exercise_data
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_exercise_data.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only update exercise data from their own workouts" ON workout_exercise_data
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_exercise_data.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can only delete exercise data from their own workouts" ON workout_exercise_data
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM workouts 
+            WHERE workouts.id = workout_exercise_data.workout_id 
+            AND workouts.user_id = auth.uid()
+        )
+    );
+
+-- Sync Queue: Each user can only see their own sync operations
+CREATE POLICY "Users can only see their own sync operations" ON sync_queue
+    FOR SELECT USING (
+        -- Only show sync operations where the data contains the user's ID
+        -- or operations that are system-wide (no user_id in data)
+        (data->>'user_id')::uuid = auth.uid() OR data->>'user_id' IS NULL
+    );
+
+CREATE POLICY "Users can only insert their own sync operations" ON sync_queue
+    FOR INSERT WITH CHECK (
+        (data->>'user_id')::uuid = auth.uid() OR data->>'user_id' IS NULL
+    );
+
+CREATE POLICY "Users can only update their own sync operations" ON sync_queue
+    FOR UPDATE USING (
+        (data->>'user_id')::uuid = auth.uid() OR data->>'user_id' IS NULL
+    );
+
+CREATE POLICY "Users can only delete their own sync operations" ON sync_queue
+    FOR DELETE USING (
+        (data->>'user_id')::uuid = auth.uid() OR data->>'user_id' IS NULL
+    );
+
+-- RP Progression State: Users can only access their own progression data
+CREATE POLICY "Users can only see their own progression state" ON rp_progression_state
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own progression state" ON rp_progression_state
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own progression state" ON rp_progression_state
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own progression state" ON rp_progression_state
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Mesocycle Settings: Users can only access their own mesocycle settings
+CREATE POLICY "Users can only see their own mesocycle settings" ON mesocycle_settings
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own mesocycle settings" ON mesocycle_settings
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own mesocycle settings" ON mesocycle_settings
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own mesocycle settings" ON mesocycle_settings
+    FOR DELETE USING (auth.uid() = user_id);
 
 -- Create views for common queries
 CREATE VIEW workout_summary AS
