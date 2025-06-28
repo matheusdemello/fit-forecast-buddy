@@ -87,6 +87,31 @@ class WebDatabaseFallback implements WebDatabase {
       sets.push({ id, workout_id, exercise_id, reps, weight, rest_time, notes });
       localStorage.setItem(this.storage.sets, JSON.stringify(sets));
     }
+
+    if (lowerSql.includes('delete from workout_sets where workout_id')) {
+      const sets = this.getStoredData(this.storage.sets, []);
+      const workoutId = params?.[0];
+      const filteredSets = sets.filter((set: any) => set.workout_id !== workoutId);
+      localStorage.setItem(this.storage.sets, JSON.stringify(filteredSets));
+    }
+
+    if (lowerSql.includes('delete from workouts where id')) {
+      const workouts = this.getStoredData(this.storage.workouts, []);
+      const workoutId = params?.[0];
+      const filteredWorkouts = workouts.filter((workout: any) => workout.id !== workoutId);
+      localStorage.setItem(this.storage.workouts, JSON.stringify(filteredWorkouts));
+    }
+
+    if (lowerSql.includes('update workouts set')) {
+      const workouts = this.getStoredData(this.storage.workouts, []);
+      const [date, duration, notes, workoutId] = params || [];
+      
+      const workoutIndex = workouts.findIndex((workout: any) => workout.id === workoutId);
+      if (workoutIndex !== -1) {
+        workouts[workoutIndex] = { ...workouts[workoutIndex], date, duration, notes };
+        localStorage.setItem(this.storage.workouts, JSON.stringify(workouts));
+      }
+    }
   }
 
   async execute(sql: string): Promise<void> {
@@ -132,7 +157,10 @@ export const useDatabase = () => {
             id TEXT PRIMARY KEY,
             date TEXT NOT NULL,
             duration INTEGER NOT NULL,
-            notes TEXT
+            notes TEXT,
+            overall_fatigue INTEGER,
+            overall_soreness INTEGER,
+            session_rating INTEGER
           );
         `);
 
@@ -145,6 +173,50 @@ export const useDatabase = () => {
             weight REAL NOT NULL,
             rest_time INTEGER,
             notes TEXT,
+            rir INTEGER,
+            FOREIGN KEY (workout_id) REFERENCES workouts (id),
+            FOREIGN KEY (exercise_id) REFERENCES exercises (id)
+          );
+        `);
+
+        await database.execute(`
+          CREATE TABLE IF NOT EXISTS rp_progression_state (
+            exercise_id TEXT PRIMARY KEY,
+            current_mesocycle_week INTEGER NOT NULL DEFAULT 1,
+            previous_sets INTEGER NOT NULL DEFAULT 3,
+            previous_weight REAL NOT NULL DEFAULT 0,
+            previous_rir_avg REAL NOT NULL DEFAULT 3,
+            rolling_fatigue_score REAL NOT NULL DEFAULT 2,
+            consecutive_weeks_progressing INTEGER NOT NULL DEFAULT 0,
+            last_deload_date TEXT,
+            volume_landmark TEXT NOT NULL DEFAULT 'MEV',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (exercise_id) REFERENCES exercises (id)
+          );
+        `);
+
+        await database.execute(`
+          CREATE TABLE IF NOT EXISTS mesocycle_settings (
+            exercise_id TEXT PRIMARY KEY,
+            mev_sets INTEGER NOT NULL DEFAULT 3,
+            mav_sets INTEGER NOT NULL DEFAULT 6,
+            mrv_sets INTEGER NOT NULL DEFAULT 10,
+            deload_frequency_weeks INTEGER NOT NULL DEFAULT 4,
+            target_rir_min INTEGER NOT NULL DEFAULT 1,
+            target_rir_max INTEGER NOT NULL DEFAULT 3,
+            weight_increment REAL NOT NULL DEFAULT 2.5,
+            FOREIGN KEY (exercise_id) REFERENCES exercises (id)
+          );
+        `);
+
+        await database.execute(`
+          CREATE TABLE IF NOT EXISTS workout_exercise_data (
+            id TEXT PRIMARY KEY,
+            workout_id TEXT NOT NULL,
+            exercise_id TEXT NOT NULL,
+            pump_rating INTEGER,
+            performance_rating INTEGER,
             FOREIGN KEY (workout_id) REFERENCES workouts (id),
             FOREIGN KEY (exercise_id) REFERENCES exercises (id)
           );

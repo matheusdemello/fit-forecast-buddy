@@ -1,12 +1,21 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, Dumbbell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Calendar, Clock, Dumbbell, Edit2, Trash2, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useWorkouts } from '../hooks/useWorkouts';
+import { Workout } from '../types/workout';
+import { toast } from 'sonner';
+import WorkoutEditDialog from './WorkoutEditDialog';
 
 const WorkoutHistory = () => {
-  const { workouts, loading } = useWorkouts();
+  const { workouts, loading, deleteWorkout, updateWorkout } = useWorkouts();
+  const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
+  const [workoutToEdit, setWorkoutToEdit] = useState<Workout | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -36,6 +45,38 @@ const WorkoutHistory = () => {
         return exerciseTotal + (set.weight * set.reps);
       }, 0);
     }, 0);
+  };
+
+  const handleDeleteWorkout = async () => {
+    if (!workoutToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const success = await deleteWorkout(workoutToDelete.id);
+      if (success) {
+        toast.success('Workout deleted successfully');
+        setWorkoutToDelete(null);
+      } else {
+        toast.error('Failed to delete workout');
+      }
+    } catch (error) {
+      toast.error('Failed to delete workout');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditWorkout = (workout: Workout) => {
+    setWorkoutToEdit(workout);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEditedWorkout = async (workoutId: string, updatedWorkout: Omit<Workout, 'id'>) => {
+    try {
+      return await updateWorkout(workoutId, updatedWorkout);
+    } catch (error) {
+      return false;
+    }
   };
 
   if (loading) {
@@ -73,10 +114,35 @@ const WorkoutHistory = () => {
                     </div>
                     <div>{workout.duration}m</div>
                   </div>
+                  {workout.notes && (
+                    <p className="text-sm text-muted-foreground mt-2">{workout.notes}</p>
+                  )}
                 </div>
-                <div className="text-right text-sm">
-                  <div className="font-medium">{getTotalSets(workout)} sets</div>
-                  <div className="text-muted-foreground">{getTotalVolume(workout).toLocaleString()}kg total</div>
+                <div className="flex items-start gap-2">
+                  <div className="text-right text-sm">
+                    <div className="font-medium">{getTotalSets(workout)} sets</div>
+                    <div className="text-muted-foreground">{getTotalVolume(workout).toLocaleString()}kg total</div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditWorkout(workout)}>
+                        <Edit2 className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setWorkoutToDelete(workout)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -105,6 +171,40 @@ const WorkoutHistory = () => {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!workoutToDelete} onOpenChange={() => setWorkoutToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Workout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this workout from {workoutToDelete ? formatDate(workoutToDelete.date) : ''}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteWorkout}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Workout Dialog */}
+      <WorkoutEditDialog
+        workout={workoutToEdit}
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setWorkoutToEdit(null);
+        }}
+        onSave={handleSaveEditedWorkout}
+      />
     </div>
   );
 };

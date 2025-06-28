@@ -10,8 +10,9 @@ interface SetRowProps {
   setIndex: number;
   isCompleted: boolean;
   onToggleCompletion: () => void;
-  onUpdateSet: (field: 'reps' | 'weight', value: number) => void;
+  onUpdateSet: (field: 'reps' | 'weight' | 'rir', value: number) => void;
   onRemoveSet: () => void;
+  showRIR?: boolean;
 }
 
 const SetRow = ({ 
@@ -20,10 +21,13 @@ const SetRow = ({
   isCompleted, 
   onToggleCompletion, 
   onUpdateSet, 
-  onRemoveSet 
+  onRemoveSet,
+  showRIR = true
 }: SetRowProps) => {
+  const gridCols = showRIR ? "grid-cols-14" : "grid-cols-12";
+  
   return (
-    <div className={`grid grid-cols-12 gap-2 items-center ${isCompleted ? 'opacity-75' : ''}`}>
+    <div className={`grid ${gridCols} gap-2 items-center ${isCompleted ? 'opacity-75' : ''}`}>
       <div className="col-span-1">
         <Button
           variant="ghost"
@@ -34,7 +38,7 @@ const SetRow = ({
           <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-green-600' : 'text-muted-foreground'}`} />
         </Button>
       </div>
-      <div className="col-span-2 text-sm font-medium">
+      <div className="col-span-1 text-sm font-medium">
         {setIndex + 1}
       </div>
       <div className="col-span-3">
@@ -45,18 +49,34 @@ const SetRow = ({
           step="2.5"
           min="0"
           disabled={isCompleted}
+          placeholder="kg"
         />
       </div>
-      <div className="col-span-3">
+      <div className="col-span-2">
         <Input
           type="number"
           value={set.reps}
           onChange={(e) => onUpdateSet('reps', parseInt(e.target.value) || 0)}
           min="1"
           disabled={isCompleted}
+          placeholder="reps"
         />
       </div>
-      <div className="col-span-2 text-xs text-muted-foreground">
+      {showRIR && (
+        <div className="col-span-2">
+          <Input
+            type="number"
+            value={set.rir || 3}
+            onChange={(e) => onUpdateSet('rir', parseInt(e.target.value) || 0)}
+            min="0"
+            max="4"
+            disabled={isCompleted}
+            placeholder="RIR"
+            className="text-center"
+          />
+        </div>
+      )}
+      <div className={`${showRIR ? 'col-span-3' : 'col-span-2'} text-xs text-muted-foreground`}>
         {set.rest_time || 90}s
       </div>
       <div className="col-span-1">

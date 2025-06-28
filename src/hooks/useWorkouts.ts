@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useDatabase } from './useDatabase';
-import { Workout, WorkoutSet, Exercise, WorkoutSuggestion } from '../types/workout';
+import { Workout, WorkoutSet, Exercise, WorkoutSuggestion, WorkoutExercise, RPProgressionRecommendation } from '../types/workout';
 import { getEnhancedWorkoutSuggestions, EnhancedWorkoutSuggestion } from '../utils/workoutSuggestions';
+import { useRPProgression } from './useRPProgression';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useWorkouts = () => {
@@ -9,6 +10,11 @@ export const useWorkouts = () => {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(false);
+  const { 
+    initializeExerciseProgression, 
+    getProgressionRecommendation, 
+    logWorkout: logRPWorkout 
+  } = useRPProgression();
 
   const loadExercises = async () => {
     if (!db || !isReady) return;
@@ -95,18 +101,26 @@ export const useWorkouts = () => {
     try {
       const workoutId = uuidv4();
       
-      // Save workout
+      // Save workout with RP metrics
       await db.run(
-        'INSERT INTO workouts (id, date, duration, notes) VALUES (?, ?, ?, ?)',
-        [workoutId, workout.date, workout.duration, workout.notes || null]
+        'INSERT INTO workouts (id, date, duration, notes, overall_fatigue, overall_soreness, session_rating) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [workoutId, workout.date, workout.duration, workout.notes || null, workout.overall_fatigue || null, workout.overall_soreness || null, workout.session_rating || null]
       );
       
-      // Save sets
+      // Save sets with RIR
       for (const exerciseData of workout.exercises) {
+        // Save exercise-level data if present
+        if (exerciseData.pump_rating || exerciseData.performance_rating) {
+          await db.run(
+            'INSERT INTO workout_exercise_data (id, workout_id, exercise_id, pump_rating, performance_rating) VALUES (?, ?, ?, ?, ?)',
+            [uuidv4(), workoutId, exerciseData.exercise.id, exerciseData.pump_rating || null, exerciseData.performance_rating || null]
+          );
+        }
+        
         for (const set of exerciseData.sets) {
           await db.run(
-            'INSERT INTO workout_sets (id, workout_id, exercise_id, reps, weight, rest_time, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [uuidv4(), workoutId, exerciseData.exercise.id, set.reps, set.weight, set.rest_time || null, set.notes || null]
+            'INSERT INTO workout_sets (id, workout_id, exercise_id, reps, weight, rest_time, notes, rir) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [uuidv4(), workoutId, exerciseData.exercise.id, set.reps, set.weight, set.rest_time || null, set.notes || null, set.rir || null]
           );
         }
       }
@@ -115,6 +129,28 @@ export const useWorkouts = () => {
       console.log('Workout saved successfully');
     } catch (error) {
       console.error('Error saving workout:', error);
+    }
+  };
+
+  // Enhanced save workout with RP progression tracking
+  const saveWorkoutWithRP = async (workout: Omit<Workout, 'id'>, exerciseData: WorkoutExercise[]) => {
+    if (!db || !isReady) return;
+    
+    try {
+      // Save the workout first
+      await saveWorkout(workout);
+      
+      // Log with RP progression system
+      const completeWorkout: Workout = {
+        ...workout,
+        id: uuidv4() // This would be the actual saved workout ID
+      };
+      
+      await logRPWorkout(completeWorkout, exerciseData);
+      
+      console.log('Workout saved with RP progression tracking');
+    } catch (error) {
+      console.error('Error saving workout with RP progression:', error);
     }
   };
 
@@ -132,6 +168,14 @@ export const useWorkouts = () => {
 
   const getEnhancedSuggestions = (exerciseId: string): EnhancedWorkoutSuggestion[] => {
     return getEnhancedWorkoutSuggestions(exerciseId, exercises, workouts);
+  };
+
+  // Get RP-based progression recommendations
+  const getRPRecommendation = async (exerciseId: string): Promise<RPProgressionRecommendation | null> => {
+    const exercise = exercises.find(e => e.id === exerciseId);
+    if (!exercise) return null;
+    
+    return await getProgressionRecommendation(exerciseId, exercise.name);
   };
 
   const addExercise = async (name: string, category: 'push' | 'pull' | 'legs' | 'core' = 'push'): Promise<Exercise | null> => {
@@ -162,6 +206,9 @@ export const useWorkouts = () => {
         [exerciseId, newExercise.name, newExercise.category, JSON.stringify(newExercise.muscle_groups)]
       );
       
+      // Initialize RP progression for new exercise
+      await initializeExerciseProgression(newExercise);
+      
       // Refresh exercises list
       await loadExercises();
       
@@ -169,6 +216,59 @@ export const useWorkouts = () => {
     } catch (error) {
       console.error('Error adding exercise:', error);
       return null;
+    }
+  };
+
+  const deleteWorkout = async (workoutId: string): Promise<boolean> => {
+    if (!db || !isReady) return false;
+    
+    try {
+      // Delete workout sets first (foreign key constraint)
+      await db.run('DELETE FROM workout_sets WHERE workout_id = ?', [workoutId]);
+      
+      // Delete the workout
+      await db.run('DELETE FROM workouts WHERE id = ?', [workoutId]);
+      
+      // Refresh workouts list
+      await loadWorkouts();
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting workout:', error);
+      return false;
+    }
+  };
+
+  const updateWorkout = async (workoutId: string, updatedWorkout: Omit<Workout, 'id'>): Promise<boolean> => {
+    if (!db || !isReady) return false;
+    
+    try {
+      // Update workout basic info
+      await db.run(
+        'UPDATE workouts SET date = ?, duration = ?, notes = ? WHERE id = ?',
+        [updatedWorkout.date, updatedWorkout.duration, updatedWorkout.notes || null, workoutId]
+      );
+      
+      // Delete existing sets for this workout
+      await db.run('DELETE FROM workout_sets WHERE workout_id = ?', [workoutId]);
+      
+      // Insert updated sets
+      for (const exerciseData of updatedWorkout.exercises) {
+        for (const set of exerciseData.sets) {
+          await db.run(
+            'INSERT INTO workout_sets (id, workout_id, exercise_id, reps, weight, rest_time, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [set.id || uuidv4(), workoutId, exerciseData.exercise.id, set.reps, set.weight, set.rest_time || null, set.notes || null]
+          );
+        }
+      }
+      
+      // Refresh workouts list
+      await loadWorkouts();
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating workout:', error);
+      return false;
     }
   };
 
@@ -224,9 +324,13 @@ export const useWorkouts = () => {
     exercises,
     loading,
     saveWorkout,
+    saveWorkoutWithRP,
     getWorkoutSuggestions,
     getEnhancedSuggestions,
+    getRPRecommendation,
     addExercise,
+    deleteWorkout,
+    updateWorkout,
     refreshWorkouts: loadWorkouts
   };
 };
