@@ -9,7 +9,6 @@ export class WorkoutService {
   static async getWorkouts(limit = 20): Promise<Workout[]> {
     try {
       if (!isOnline()) {
-        // Return cached workouts from localStorage in offline mode
         const cached = localStorage.getItem('workouts_cache');
         return cached ? JSON.parse(cached) : [];
       }
@@ -27,7 +26,6 @@ export class WorkoutService {
         return cached ? JSON.parse(cached) : [];
       }
 
-      // Get all workout IDs to fetch sets
       const workoutIds = workoutsData.map(w => w.id);
       
       if (workoutIds.length === 0) {

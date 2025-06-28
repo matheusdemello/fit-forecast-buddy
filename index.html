@@ -1,24 +1,100 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fit-forecast-buddy</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+    <title> FitBuddy - Transform Your Body, Elevate Your Spirit</title>
+    <meta name="description" content="Aggressive fitness tracking app with Indian-inspired design. Transform your body and elevate your spirit with powerful workout logging." />
+    <meta name="author" content="FitBuddy Team" />
+    <meta name="keywords" content="fitness, workout, indian design, aggressive theme, dark mode, exercise tracking" />
+    <meta name="theme-color" content="#059669" />
 
-    <meta property="og:title" content="fit-forecast-buddy" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <meta property="og:title" content=" FitBuddy - Transform Your Body, Elevate Your Spirit" />
+    <meta property="og:description" content="Aggressive fitness tracking app with Indian-inspired design and powerful workout logging capabilities." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:site" content="@fitbuddy_app" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <!-- Preload fonts for better performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <style>
+      /* Ensure dark theme is applied immediately to prevent flash */
+      html.dark body {
+        background-color: rgb(3 7 18);
+        color: rgb(209 250 229);
+      }
+      
+      /* Loading spinner with Indian motifs */
+      .loading-spinner {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(5, 150, 105, 0.3);
+        border-radius: 50%;
+        border-top-color: #059669;
+        animation: spin 1s ease-in-out infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      .initial-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, rgb(3 7 18), rgb(6 20 37));
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      .initial-loader.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
   </head>
 
   <body>
+    <!-- Initial loading screen with Indian motifs -->
+    <div id="initial-loader" class="initial-loader">
+      <div style="color: #10b981; font-size: 2rem; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">
+         FitBuddy 
+      </div>
+      <div class="loading-spinner"></div>
+      <div style="color: #6ee7b7; font-size: 0.875rem; margin-top: 1rem; text-align: center;">
+        Transform Your Body, Elevate Your Spirit
+      </div>
+    </div>
+    
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <script>
+      // Ensure dark theme is applied
+      document.documentElement.classList.add('dark');
+      
+      // Hide loader once content is loaded
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const loader = document.getElementById('initial-loader');
+          if (loader) {
+            loader.classList.add('fade-out');
+            setTimeout(() => loader.remove(), 500);
+          }
+        }, 1000);
+      });
+    </script>
   </body>
 </html>
