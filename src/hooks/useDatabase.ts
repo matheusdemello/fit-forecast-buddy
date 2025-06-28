@@ -66,6 +66,14 @@ class WebDatabaseFallback implements WebDatabase {
       }
     }
     
+    if (lowerSql.includes('insert into exercises')) {
+      const exercises = this.getStoredData(this.storage.exercises, []);
+      const [id, name, category, muscle_groups] = params || [];
+      
+      exercises.push({ id, name, category, muscle_groups });
+      localStorage.setItem(this.storage.exercises, JSON.stringify(exercises));
+    }
+    
     if (lowerSql.includes('insert into workouts')) {
       const workouts = this.getStoredData(this.storage.workouts, []);
       const [id, date, duration, notes] = params || [];

@@ -2,23 +2,23 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Timer, CheckCircle2, Target, Dumbbell } from 'lucide-react';
 import { useWorkouts } from '../hooks/useWorkouts';
 import { Exercise, WorkoutSet, WorkoutExercise } from '../types/workout';
 import { toast } from 'sonner';
 import RestTimer from './RestTimer';
+import ExerciseSelector from './ExerciseSelector';
 import { v4 as uuidv4 } from 'uuid';
 
 const WorkoutLogger = () => {
-  const { exercises, saveWorkout, getEnhancedSuggestions } = useWorkouts();
+  const { exercises, saveWorkout, getEnhancedSuggestions, addExercise } = useWorkouts();
   const [currentWorkout, setCurrentWorkout] = useState<WorkoutExercise[]>([]);
   const [workoutStartTime] = useState(new Date());
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
   const [showRestTimer, setShowRestTimer] = useState<{ exerciseIndex: number; setIndex: number; restTime: number } | null>(null);
 
-  const addExercise = () => {
+  const handleAddExercise = () => {
     if (!selectedExercise) return;
     
     const exercise = exercises.find(e => e.id === selectedExercise);
@@ -45,6 +45,21 @@ const WorkoutLogger = () => {
       toast.success(`💡 ${suggestion.reason}`, {
         description: `Rest: ${suggestion.rest_time}s | Progression: ${suggestion.progression_type}`
       });
+    }
+  };
+
+  const handleCreateExercise = async (name: string): Promise<Exercise | null> => {
+    try {
+      const newExercise = await addExercise(name);
+      if (newExercise) {
+        toast.success(`Created new exercise: ${newExercise.name}`, {
+          description: `Category: ${newExercise.category}`
+        });
+      }
+      return newExercise;
+    } catch (error) {
+      toast.error('Failed to create exercise');
+      return null;
     }
   };
 
@@ -155,23 +170,13 @@ const WorkoutLogger = () => {
       </div>
 
       <Card className="p-4">
-        <div className="flex gap-2">
-          <Select value={selectedExercise} onValueChange={setSelectedExercise}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select exercise" />
-            </SelectTrigger>
-            <SelectContent>
-              {exercises.map(exercise => (
-                <SelectItem key={exercise.id} value={exercise.id}>
-                  {exercise.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={addExercise} disabled={!selectedExercise}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
+        <ExerciseSelector
+          exercises={exercises}
+          selectedExercise={selectedExercise}
+          onSelectedExerciseChange={setSelectedExercise}
+          onAddExercise={handleAddExercise}
+          onCreateExercise={handleCreateExercise}
+        />
       </Card>
 
       {showRestTimer && (
